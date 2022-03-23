@@ -2,6 +2,7 @@
 /data
 /results
 
+*.Rproj
 
 ########## R.gitignore ##########
 
