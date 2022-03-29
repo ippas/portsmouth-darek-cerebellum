@@ -1,4 +1,5 @@
-### This analysis is performed based on Callisto transcripts table - ANOVA on TPM and EgdeR on counts
+### This analysis is performed based on gene counts table
+
 require(magrittr)
 require(gplots)
 require(RColorBrewer)
@@ -20,18 +21,10 @@ rownames(samples) <- samples$id
 
 ##### PART 1 ANOVA analysis #####
 
-tpms <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_transcript-level-tpm-annotated.tsv')
+tpms <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_gene-level-counts-annotated.tsv')
 
-##### transform tmps - this requires an older version of R (done on R 3.6)####
-
-#tpms[,12:31] %>% data.matrix %>% normalize.quantiles() -> normalised
-#colnames(normalised) <- colnames(tpms[,12:31])
-#rownames(normalised) <- tpms$`Gene name`
-#normalised <- data.frame(normalised)
-
-#write_tsv(normalised, '/projects/portsmouth-darek-cerebellum/data/quantile-normalised-tpm.tsv')
-
-read_tsv('/projects/portsmouth-darek-cerebellum/data/quantile-normalised-tpm.tsv') %>% data.matrix() -> normalised
+tpms[,11:30] %>% data.matrix %>% normalize.quantiles() -> normalised
+colnames(normalised) <- colnames(tpms[,11:30])
 rownames(normalised) <- tpms$`Transcript stable ID`
 log_tpms <- log2(normalised + 1)
 
@@ -44,9 +37,8 @@ colnames(results) <- c('transcript_stable_id', 'gene_name', 'gene_synonyms')
 
 stat_one_way <- function(x) {
   y <- unlist(x, use.names = FALSE)
-  summary(aov(y ~ samples$group)) %>%
-    unlist %>%
-    extract(c("Pr(>F)1"))
+  (summary(aov(y ~ samples$group)) %>%
+    unlist)[9]
 }
 
 
@@ -63,9 +55,8 @@ rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcri
 
 stat <- function(x) {
   y <- unlist(x, use.names = FALSE)
-  summary(aov(y ~ samples$genotype * samples$age)) %>%
-    unlist %>%
-    extract(c("Pr(>F)1", "Pr(>F)2", "Pr(>F)3" )) # genotype, age, interaction
+  (summary(aov(y ~ samples$genotype * samples$age)) %>%
+    unlist)[c(17,18,19)] # genotype, age, interaction
 }
 
 
@@ -75,7 +66,7 @@ apply(log_tpms[,samples$id], 1, stat)[3,] %>% p.adjust(., method="fdr") -> resul
 
 
 # prepare to plot
-results %>% filter(age_fdr < 0.0000000001) %>% select(transcript_stable_id) -> transcripts_to_plot
+results %>% filter(interaction_fdr < 0.1) %>% select(transcript_stable_id) -> transcripts_to_plot
 log_tpms[transcripts_to_plot$transcript_stable_id,samples$id] -> to_plot
 rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcript_stable_id)]
 
@@ -85,19 +76,18 @@ rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcri
 stat_paired_t <- function(x) {
                   if (is.na(x[1])) { c(NA, NA, NA, NA)
                   } else { 
-                    pairwise.t.test(
+                    (pairwise.t.test(
                       x, samples$group, p.adjust.method = 'bonferroni') %>% 
-                      unlist() %>% 
-                      extract(c("p.value1", "p.value2", "p.value9")) #mdx vs wt 10 days, mdx vs mdx age, 10weeks mdx vs wt
+                      unlist())[c(3,4,8)] #mdx vs wt 10 days, mdx vs mdx age, 10weeks mdx vs wt
                   }}
                 
 
-apply(log_tpms[,samples$id], 1, stat_paired_t)[1,] -> results$t_test_mdx_10d_vs_wt_10d
-apply(log_tpms[,samples$id], 1, stat_paired_t)[2,] -> results$t_test_mdx_10d_vs_mdx_10w
-apply(log_tpms[,samples$id], 1, stat_paired_t)[3,] -> results$t_test_mdx_10w_vs_wt_10w
+apply(log_tpms[,samples$id], 1, stat_paired_t)[1,] -> results$t_test_mdx_10d_vs_mdx_10w
+apply(log_tpms[,samples$id], 1, stat_paired_t)[2,] -> results$t_test_mdx_10d_vs_wt_10d
+apply(log_tpms[,samples$id], 1, stat_paired_t)[3,] -> results$t_test_mdx_10w_vs_wt_10w 
 
 # prepare to plot
-results %>% filter(t_test_mdx_10d_vs_wt_10d < 0.001) %>% select(transcript_stable_id) -> transcripts_to_plot
+results %>% filter(t_test_mdx_10d_vs_mdx_10w < 0.001) %>% select(transcript_stable_id) -> transcripts_to_plot
 log_tpms[transcripts_to_plot$transcript_stable_id,samples$id] -> to_plot
 rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcript_stable_id)]
 
@@ -105,22 +95,26 @@ rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcri
 
 ##### PART 2 EdgeR analysis #####
 
-counts <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_transcript-level-counts-annotated.tsv')
-  
+counts <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_gene-level-counts-annotated.tsv')
+rownames(counts) <- counts$`Transcript stable ID`
+
 design <- model.matrix(~0+group, data=samples)
 colnames(design) <- levels(as.factor(samples$group))
 
 
-counts_edger <- DGEList(counts=counts[,12:31], group=samples$group)
+counts_edger <- DGEList(counts=counts[,samples$id], group=samples$group)
 keep <- filterByExpr(counts_edger)
 counts_edger <- counts_edger[keep, , keep.lib.sizes=FALSE]
 counts_edger <- calcNormFactors(counts_edger)
 
-
 counts_edger <- estimateDisp(counts_edger, design)
 fit <- glmQLFit(counts_edger, design)
 
-my.contrasts <- makeContrasts(mdx_age_corrected_wt=(MDX10D-MDX10W-WT10D-WT10W), #mdx10d vs mdx10w but controlled for wt effects
+
+
+### two-way equivalen with specific tests ###
+
+my.contrasts <- makeContrasts(mdx_age_corrected_wt=(MDX10D-MDX10W-WT10D+WT10W), #mdx10d vs mdx10w but controlled for wt effects
   #mdx10d vs mdx10w not controlled
   mdx_age=MDX10W-MDX10D,
   #genotype effect 10 days
@@ -150,7 +144,9 @@ wt_test$table$transcript_id <- tpms$`Transcript stable ID`[match(rownames(wt_tes
 
 
 ### prepare for plotting ###
-wt_test$table %>% filter(PValue < 0.01) %>% select(transcript_id) -> transcripts_to_plot
+mdx_vs_wt_10d_test$table %>% filter(FDR < 0.1) %>% select(transcript_id) -> transcripts_to_plot
+
+
 log_tpms[transcripts_to_plot$transcript_id,samples$id] -> to_plot
 rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcript_stable_id)]
 
@@ -196,8 +192,8 @@ to_plot %>%
     labRow=rownames(to_plot),
     #labCol=col.labels,         
     srtCol = 45,
-    cexRow = 0.6,
-    offsetCol = 0.1
+    cexRow = 0.9,
+    offsetCol = 0.4
   )
 
 
