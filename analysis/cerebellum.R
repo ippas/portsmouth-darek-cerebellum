@@ -8,6 +8,7 @@ require(stringi)
 require(stringr)
 require(preprocessCore)
 require(edgeR)
+require(writexl)
 
 
 samples <- data.frame(c('sample_BD1', 'sample_BD2', 'sample_BD3', 'sample_BD4', 'sample_BD5', 'sample_BW1', 'sample_BW2', 'sample_BW3', 'sample_BW4',
@@ -18,85 +19,23 @@ samples <- data.frame(c('sample_BD1', 'sample_BD2', 'sample_BD3', 'sample_BD4', 
 colnames(samples) <- c('id', 'genotype', 'age', 'group')
 rownames(samples) <- samples$id
 
+##### construct a results table #####
+counts <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_gene-level-counts-annotated.tsv')
 
-##### PART 1 ANOVA analysis #####
+
+write_xlsx(counts,'/projects/portsmouth-darek-cerebellum/results/seq-results/gene-counts-table.xlsx')
+rownames(counts) <- counts$`Transcript stable ID`
+
+results <- data.frame(counts$`Transcript stable ID`, counts$`Gene name`, counts$`Gene Synonym`, counts$`Gene stable ID`)
+colnames(results) <- c('transcript_stable_id', 'gene_name', 'gene_synonyms', 'gene_stable_id')
 
 tpms <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_gene-level-counts-annotated.tsv')
-
 tpms[,11:30] %>% data.matrix %>% normalize.quantiles() -> normalised
 colnames(normalised) <- colnames(tpms[,11:30])
 rownames(normalised) <- tpms$`Transcript stable ID`
 log_tpms <- log2(normalised + 1)
 
-
-##### construct a results table #####
-results <- data.frame(tpms$`Transcript stable ID`, tpms$`Gene name`, tpms$`Gene Synonym`)
-colnames(results) <- c('transcript_stable_id', 'gene_name', 'gene_synonyms')
-
-##### one-way anova to check the overall group effect #####
-
-stat_one_way <- function(x) {
-  y <- unlist(x, use.names = FALSE)
-  (summary(aov(y ~ samples$group)) %>%
-    unlist)[9]
-}
-
-
-apply(log_tpms[,samples$id], 1, stat_one_way) %>% p.adjust(., method="fdr") -> results$one_way_fdr
-
-# prepare to plot
-results %>% filter(one_way_fdr < 0.0001) %>% select(transcript_stable_id) -> transcripts_to_plot
-log_tpms[transcripts_to_plot$transcript_stable_id,samples$id] -> to_plot
-rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcript_stable_id)]
-
-
-
-##### two-way anova ####
-
-stat <- function(x) {
-  y <- unlist(x, use.names = FALSE)
-  (summary(aov(y ~ samples$genotype * samples$age)) %>%
-    unlist)[c(17,18,19)] # genotype, age, interaction
-}
-
-
-apply(log_tpms[,samples$id], 1, stat)[1,] %>% p.adjust(., method="fdr") -> results$genotype_fdr
-apply(log_tpms[,samples$id], 1, stat)[2,] %>% p.adjust(., method="fdr") -> results$age_fdr
-apply(log_tpms[,samples$id], 1, stat)[3,] %>% p.adjust(., method="fdr") -> results$interaction_fdr
-
-
-# prepare to plot
-results %>% filter(interaction_fdr < 0.1) %>% select(transcript_stable_id) -> transcripts_to_plot
-log_tpms[transcripts_to_plot$transcript_stable_id,samples$id] -> to_plot
-rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcript_stable_id)]
-
-
-##### pairwise t-tests for requested comparisons #####
-
-stat_paired_t <- function(x) {
-                  if (is.na(x[1])) { c(NA, NA, NA, NA)
-                  } else { 
-                    (pairwise.t.test(
-                      x, samples$group, p.adjust.method = 'bonferroni') %>% 
-                      unlist())[c(3,4,8)] #mdx vs wt 10 days, mdx vs mdx age, 10weeks mdx vs wt
-                  }}
-                
-
-apply(log_tpms[,samples$id], 1, stat_paired_t)[1,] -> results$t_test_mdx_10d_vs_mdx_10w
-apply(log_tpms[,samples$id], 1, stat_paired_t)[2,] -> results$t_test_mdx_10d_vs_wt_10d
-apply(log_tpms[,samples$id], 1, stat_paired_t)[3,] -> results$t_test_mdx_10w_vs_wt_10w 
-
-# prepare to plot
-results %>% filter(t_test_mdx_10d_vs_mdx_10w < 0.001) %>% select(transcript_stable_id) -> transcripts_to_plot
-log_tpms[transcripts_to_plot$transcript_stable_id,samples$id] -> to_plot
-rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcript_stable_id)]
-
-
-
-##### PART 2 EdgeR analysis #####
-
-counts <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_gene-level-counts-annotated.tsv')
-rownames(counts) <- counts$`Transcript stable ID`
+##### EdgeR analysis #####
 
 design <- model.matrix(~0+group, data=samples)
 colnames(design) <- levels(as.factor(samples$group))
@@ -112,6 +51,7 @@ fit <- glmQLFit(counts_edger, design)
 
 
 
+colnames(counts)
 ### two-way equivalen with specific tests ###
 
 my.contrasts <- makeContrasts(mdx_age_corrected_wt=(MDX10D-MDX10W-WT10D+WT10W), #mdx10d vs mdx10w but controlled for wt effects
@@ -136,16 +76,47 @@ mdx_vs_wt_10d_test <- topTags(mdx_vs_wt_10d_fit, n="inf")
 mdx_vs_wt_10w_test <- topTags(mdx_vs_wt_10w_fit, n="inf")
 wt_test <- topTags(wt_fit, n='inf')
 
-mdx_age_test$table$transcript_id <- tpms$`Transcript stable ID`[match(rownames(mdx_age_test$table), rownames(tpms))]
-mdx_age_corrected_test$table$transcript_id <- tpms$`Transcript stable ID`[match(rownames(mdx_age_corrected_test$table), rownames(tpms))]
-mdx_vs_wt_10d_test$table$transcript_id <- tpms$`Transcript stable ID`[match(rownames(mdx_vs_wt_10d_test$table), rownames(tpms))]
-mdx_vs_wt_10w_test$table$transcript_id <- tpms$`Transcript stable ID`[match(rownames(mdx_vs_wt_10w_test$table), rownames(tpms))]
-wt_test$table$transcript_id <- tpms$`Transcript stable ID`[match(rownames(wt_test$table), rownames(tpms))]
+mdx_age_test$table$transcript_id <- counts$`Transcript stable ID`[match(rownames(mdx_age_test$table), rownames(counts))]
+mdx_age_corrected_test$table$transcript_id <- counts$`Transcript stable ID`[match(rownames(mdx_age_corrected_test$table), rownames(counts))]
+mdx_vs_wt_10d_test$table$transcript_id <- counts$`Transcript stable ID`[match(rownames(mdx_vs_wt_10d_test$table), rownames(counts))]
+mdx_vs_wt_10w_test$table$transcript_id <- counts$`Transcript stable ID`[match(rownames(mdx_vs_wt_10w_test$table), rownames(counts))]
+wt_test$table$transcript_id <- counts$`Transcript stable ID`[match(rownames(wt_test$table), rownames(counts))]
+
+
+mdx_age_test$table$FDR[match(results$transcript_stable_id, mdx_age_test$table$transcript_id)] -> results$FDR_mdx_age
+mdx_age_test$table$logCPM[match(results$transcript_stable_id, mdx_age_test$table$transcript_id)] -> results$logCPM_mdx_age
+mdx_age_test$table$logFC[match(results$transcript_stable_id, mdx_age_test$table$transcript_id)] -> results$logFC_mdx_age
+mdx_age_test$table$PValue[match(results$transcript_stable_id, mdx_age_test$table$transcript_id)] -> results$pvalue_mdx_age
+mdx_age_test$table$`F`[match(results$transcript_stable_id, mdx_age_test$table$transcript_id)] -> results$Fvalue_mdx_age
+
+mdx_age_corrected_test$table$FDR[match(results$transcript_stable_id, mdx_age_corrected_test$table$transcript_id)] -> results$FDR_age_interaction
+mdx_age_corrected_test$table$logCPM[match(results$transcript_stable_id, mdx_age_corrected_test$table$transcript_id)] -> results$logCPM_age_interaction
+mdx_age_corrected_test$table$logFC[match(results$transcript_stable_id, mdx_age_corrected_test$table$transcript_id)] -> results$logFC_age_interaction
+mdx_age_corrected_test$table$PValue[match(results$transcript_stable_id, mdx_age_corrected_test$table$transcript_id)] -> results$pvalue_age_interaction
+mdx_age_corrected_test$table$`F`[match(results$transcript_stable_id, mdx_age_corrected_test$table$transcript_id)] -> results$Fvalue_age_interaction
+
+mdx_vs_wt_10d_test$table$FDR[match(results$transcript_stable_id, mdx_vs_wt_10d_test$table$transcript_id)] -> results$FDR_mdx_vs_wt_10d
+mdx_vs_wt_10d_test$table$logCPM[match(results$transcript_stable_id, mdx_vs_wt_10d_test$table$transcript_id)] -> results$logCPM_mdx_vs_wt_10d
+mdx_vs_wt_10d_test$table$logFC[match(results$transcript_stable_id, mdx_vs_wt_10d_test$table$transcript_id)] -> results$logFC_mdx_vs_wt_10d
+mdx_vs_wt_10d_test$table$PValue[match(results$transcript_stable_id, mdx_vs_wt_10d_test$table$transcript_id)] -> results$pvalue_mdx_vs_wt_10d
+mdx_vs_wt_10d_test$table$`F`[match(results$transcript_stable_id, mdx_vs_wt_10d_test$table$transcript_id)] -> results$Fvalue_mdx_vs_wt_10d
+
+mdx_vs_wt_10w_test$table$FDR[match(results$transcript_stable_id, mdx_vs_wt_10w_test$table$transcript_id)] -> results$FDR_mdx_vs_wt_10w
+mdx_vs_wt_10w_test$table$logCPM[match(results$transcript_stable_id, mdx_vs_wt_10w_test$table$transcript_id)] -> results$logCPM_mdx_vs_wt_10w
+mdx_vs_wt_10w_test$table$logFC[match(results$transcript_stable_id, mdx_vs_wt_10w_test$table$transcript_id)] -> results$logFC_mdx_vs_wt_10w
+mdx_vs_wt_10w_test$table$PValue[match(results$transcript_stable_id, mdx_vs_wt_10w_test$table$transcript_id)] -> results$pvalue_mdx_vs_wt_10w
+mdx_vs_wt_10w_test$table$`F`[match(results$transcript_stable_id, mdx_vs_wt_10w_test$table$transcript_id)] -> results$Fvalue_mdx_vs_wt_10w
+
+na.omit(results) -> results
+write_xlsx(results,'/projects/portsmouth-darek-cerebellum/results/edger-results-table.xlsx')
+
+temp
+
+
 
 
 ### prepare for plotting ###
 mdx_vs_wt_10d_test$table %>% filter(FDR < 0.1) %>% select(transcript_id) -> transcripts_to_plot
-
 
 log_tpms[transcripts_to_plot$transcript_id,samples$id] -> to_plot
 rownames(to_plot) <- results$gene_name[match(rownames(to_plot), results$transcript_stable_id)]
@@ -185,6 +156,8 @@ to_plot %>%
     distfun = function(x) as.dist(1-cor(t(x))),
     col=rev(morecols(50)),trace="none",
     main="",
+    key=TRUE,
+    keysize = 0.3,
     Colv = FALSE,
     scale="row",
     colsep = c(5,10,15),
@@ -192,13 +165,11 @@ to_plot %>%
     labRow=rownames(to_plot),
     #labCol=col.labels,         
     srtCol = 45,
-    cexRow = 0.9,
-    offsetCol = 0.4
+    cexRow = 0.7,
+    offsetCol = -0.6,
+    margins = c(5, 5)
   )
 
 
-#### export results ####
 
-results <- cbind(results, log_tpms)
-write.table(results, ('/projects/portsmouth-darek-cerebellum/results/aov-all.csv')
-)
+
