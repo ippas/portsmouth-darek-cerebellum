@@ -110,9 +110,6 @@ mdx_vs_wt_10w_test$table$`F`[match(results$transcript_stable_id, mdx_vs_wt_10w_t
 na.omit(results) -> results
 write_xlsx(results,'/projects/portsmouth-darek-cerebellum/results/edger-results-table.xlsx')
 
-temp
-
-
 
 
 ### prepare for plotting ###
