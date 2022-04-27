@@ -21,10 +21,12 @@ rownames(samples) <- samples$id
 
 ##### construct a results table #####
 counts <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_gene-level-counts-annotated.tsv')
-
+transcripts <- read_tsv('/projects/portsmouth-darek-cerebellum/results/seq-results/cerebellum_transcript-level-tpm-annotated.tsv')
 
 write_xlsx(counts,'/projects/portsmouth-darek-cerebellum/results/seq-results/gene-counts-table.xlsx')
 rownames(counts) <- counts$`Transcript stable ID`
+rownames(transcripts) <- transcripts$`Transcript stable ID`
+
 
 results <- data.frame(counts$`Transcript stable ID`, counts$`Gene name`, counts$`Gene Synonym`, counts$`Gene stable ID`)
 colnames(results) <- c('transcript_stable_id', 'gene_name', 'gene_synonyms', 'gene_stable_id')
@@ -34,6 +36,18 @@ tpms[,11:30] %>% data.matrix %>% normalize.quantiles() -> normalised
 colnames(normalised) <- colnames(tpms[,11:30])
 rownames(normalised) <- tpms$`Transcript stable ID`
 log_tpms <- log2(normalised + 1)
+
+rownames(log_tpms) <- tpms$`Gene stable ID`
+write.csv(log_tpms, '/projects/portsmouth-darek-cerebellum/results/seq-results/log_counts.tsv')
+
+transcripts[,11:30] %>% data.matrix %>% normalize.quantiles() -> normalised_transcripts
+colnames(normalised_transcripts) <- colnames(tpms[,11:30])
+log_tpms_transcripts <- log2(normalised_transcripts + 1)
+rownames(log_tpms_transcripts) <- transcripts$`Transcript stable ID`
+
+write.csv(log_tpms_transcripts, '/projects/portsmouth-darek-cerebellum/results/seq-results/log_tpms_transcripts.csv')
+
+
 
 ##### EdgeR analysis #####
 
