@@ -1,7 +1,7 @@
-# Project title (institute-name-subject)
+# Portsmouth-darek-cerebellum
 
-#### Project logline (technique, organism, tissue type)
-Short description of treatment groups/subjects
+#### RNA seq of mouse cerebellum
+5 samples/group - mdx mice and wt mice 10 days vs 10 weeks old
 
 
 ## Methods
@@ -9,18 +9,28 @@ This sections should be a description of preprocessin and analysis ready to be i
 
 
 ## Preprocessing
-Details of file preprocessing
+Intelliseq flow RNA-seq pipeline was used to generate bam files
+
+- transcripts were quantified with Kallisto
+- genes were quantified with feature count
+
 
 ## Analysis
-Details of analysis
 
-*notes: all files included in the repo need to be referenced, either in README or other .md files. The analysis has to be fully reproducible, in principle the repo should contain code + description of how to run it while data and results kept outside*
+#### Differential Gene Expression analysis
+Run in R with EdgeR library
 
-## About this template
-Directories:
-- _root_ - README.md, *.Rproj, general configuration files, etc.
-- raw - raw data
-- preprocessing - scripts
-- data - useful data, created by scripts/tools/preprocessing
-- analysis - analysis source code
-- results - output ready to present
+
+#### DMD transcript analysis
+
+##### Various DMD transcript levels were quantified with multiple methods:
+
+1. All transcripts with Kallisto
+2. All transcripts with cufflinks
+3. Three main transcripts with cufflinks (compare a few options)
+4. Two main transcripts with cufflinks (compare a few options)
+
+##### Transcript levels were then compared with two-way ANOVA
+
+- are there differences between the algorithms?
+
