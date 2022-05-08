@@ -28,6 +28,12 @@ Run in R with EdgeR library
 1. All transcripts with Kallisto
 2. All transcripts with cufflinks
 3. Three main transcripts with cufflinks (compare a few options)
+
+longest: ENSMUST00000114000
+Dp140:  ENSMUST0000023926
+Dp71: ENSMUST00000113991 (Dp71 & Dp71b)
+ENSMUST00000113992 (Dp71a & Dp71ab)
+
 4. Two main transcripts with cufflinks (compare a few options)
 
 ##### Transcript levels were then compared with two-way ANOVA
