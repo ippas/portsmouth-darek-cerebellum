@@ -2,7 +2,7 @@
     "rna_seq_paired_end.analysis_id": "cerebellum",
     "rna_seq_paired_end.organism_name": "Mus musculus",
     "rna_seq_paired_end.release_version": "104",
-    "rna_seq_paired_end.gtf": "/home/ifpan/projects/portsmouth-darek-stemcells/data/Mus_musculus_dmd_2transcripts.gtf",
+    "rna_seq_paired_end.gtf": "/home/ifpan/projects/portsmouth-darek-cerebellum/preprocessing/dmd-quant/Mus_musculus.GRCm39.104.gtf",
     "rna_seq_paired_end.bam_file": [
 	"/home/ifpan/projects/portsmouth-darek-cerebellum/data/bam/sample_BD1.bam",
 	"/home/ifpan/projects/portsmouth-darek-cerebellum/data/bam/sample_BD2.bam",
